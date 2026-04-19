@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: smard_raw_data
+    database: mastr-pipeline-de
+    schema: smard_data
+    tables:
+      - name: smard_partitioned

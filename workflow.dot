@@ -1,0 +1,64 @@
+digraph mastr_pipeline {
+    rankdir=TB;
+    graph [splines=ortho, nodesep=0.6, ranksep=0.8, bgcolor=transparent];
+    node [fontname="Helvetica", fontsize=11, margin="0.2,0.1"];
+    edge [fontname="Helvetica", fontsize=9];
+
+    // ── Data Source ──
+    MaStR [label="MaStR (BNetzA)\nXML Files (~8 GB)",
+           shape=folder, style=filled, fillcolor="#FFF3CD", color="#B8860B"];
+
+    // ── Storage Layers ──
+    GCS_Raw [label="GCS Raw Layer\nUnprocessed XML",
+             shape=cylinder, style=filled, fillcolor="#D6EAF8", color="#2E86C1"];
+
+    GCS_Processed [label="GCS Processed Layer\nParquet Files",
+                   shape=cylinder, style=filled, fillcolor="#D6EAF8", color="#2E86C1"];
+
+    // ── Processing ──
+    Spark [label="PySpark\nParse · Clean · Partition",
+           shape=box, style="filled,rounded", fillcolor="#D5F5E3", color="#1E8449"];
+
+    // ── Warehouse ──
+    BigQuery [label="BigQuery\nData Warehouse",
+              shape=box, style="filled,rounded", fillcolor="#E8DAEF", color="#7D3C98"];
+
+    // ── Transformation ──
+    dbt [label="dbt\nTransform · Test · Docs",
+         shape=box, style="filled,rounded", fillcolor="#D5F5E3", color="#1E8449"];
+
+    // ── Analytics ──
+    Analytics [label="Analytics Layer\nMarts · Aggregations",
+               shape=box, style="filled,rounded", fillcolor="#E8DAEF", color="#7D3C98"];
+
+    // ── Dashboard ──
+    Dashboard [label="Looker Studio\nTrends · Maps · KPIs",
+               shape=component, style=filled, fillcolor="#FFF3CD", color="#B8860B"];
+
+    // ── Orchestration ──
+    Airflow [label="Airflow\nOrchestration",
+             shape=ellipse, style="filled,dashed", fillcolor="#E8F8F5", color="#1D9E75"];
+
+    // ── Infrastructure ──
+    Terraform [label="Terraform\nInfrastructure as Code",
+               shape=ellipse, style="filled,dashed", fillcolor="#F2F3F4", color="#717D7E"];
+
+    // ── Main Pipeline Flow ──
+    MaStR       -> GCS_Raw       [label="upload"];
+    GCS_Raw     -> Spark         [label="read"];
+    Spark       -> GCS_Processed [label="write parquet"];
+    GCS_Processed -> BigQuery    [label="load"];
+    BigQuery    -> dbt           [label="transform"];
+    dbt         -> Analytics     [label="materialize"];
+    Analytics   -> Dashboard     [label="visualize"];
+
+    // ── Airflow Orchestration ──
+    Airflow -> MaStR    [style=dashed, color="#1D9E75", label="trigger"];
+    Airflow -> Spark    [style=dashed, color="#1D9E75"];
+    Airflow -> BigQuery [style=dashed, color="#1D9E75"];
+    Airflow -> dbt      [style=dashed, color="#1D9E75"];
+
+    // ── Terraform Infra ──
+    Terraform -> GCS_Raw  [style=dashed, color="#717D7E", label="provision"];
+    Terraform -> BigQuery [style=dashed, color="#717D7E"];
+}

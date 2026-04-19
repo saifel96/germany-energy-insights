@@ -1,0 +1,25 @@
+.env
+*.json
+__pycache__/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.dbt/
+
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+credentials.json
+terraform  # Falls du die Intel-Datei dort liegen hast
+
+# Python & Data
+__pycache__/
+data/
+*.csv
+
+# Logs
+logs/
+*.log
