@@ -112,9 +112,11 @@ Uploads the partitioned Parquet files to the **GCS Processed bucket**, preservin
 
 ### 5. BigQuery
 
-Processed Parquet files are loaded into BigQuery as a native table:
-- **Partitioned** by `TIMESTAMP_TRUNC(timeseries, MONTH)` — eliminates full-table scans for time-range queries
-- **Clustered** by `category` — reduces bytes read when filtering by energy type
+Processed Parquet files are loaded into BigQuery with a two-dataset separation:
+- **`smard_data`** — raw ingestion layer: external table pointing to GCS, partitioned by `TIMESTAMP_TRUNC(timeseries, MONTH)`, clustered by `category`
+- **`dbt_smard`** — analytics layer: production-ready tables and views built by dbt, cleanly separated from raw ingestion
+
+The partition strategy eliminates full-table scans for time-range queries; clustering reduces bytes read when filtering by energy type.
 
 ### 6. dbt Transformations (`smard_analytics/`)
 
@@ -284,11 +286,14 @@ germany-energy-insights/
 
 ## Engineering Challenges
 
-### JVM Compatibility (PySpark on Java 21+)
-Kestra's container ran Java 25, which fully removed `SecurityManager` — a Hadoop dependency used by PySpark's `UserGroupInformation.getCurrentUser()`. No JVM flag can restore this in Java 21+. Resolution: the Spark task inside Kestra installs Java 17 at runtime and sets `JAVA_HOME` before invoking PySpark.
+### 1. JVM & Hadoop Compatibility (PySpark)
+Kestra's environment (Java 21+) removed `SecurityManager`, which Hadoop's `UserGroupInformation.getCurrentUser()` relies on. No JVM flag can restore this in Java 21+. Resolution: the Kestra Spark task installs `openjdk-17` at runtime and overrides `JAVA_HOME` before invoking PySpark, ensuring Spark-Hadoop connector stability.
 
-### Historical Partition Discovery (2019–2026)
-The BigQuery External Table required a metadata refresh to discover older Hive partitions already in GCS. A `dbt run --full-refresh` rebuilt all incremental models, ensuring `fct_renewable_share` covers the full 2019–2026 range.
+### 2. Orchestration & Credential Isolation
+Running dbt inside a Kestra Process Runner required secure credential injection without hardcoding. Resolution: the GCP service account JSON is stored as a Kestra KV secret (`gcp_creds`), injected into the task environment, and written to `/tmp/gcp_creds.json` at runtime — giving dbt access without exposing keys in the repository.
+
+### 3. Full-History Data Integrity (2019–2026)
+Incremental dbt models initially skipped historical years (2019–2022) due to BigQuery metadata caching of external table partitions. Resolution: a targeted `dbt run --full-refresh` dropped existing relations and rebuilt the entire 7-year lineage, resulting in over **245,000 rows** of validated energy metrics.
 
 ---
 
@@ -296,5 +301,6 @@ The BigQuery External Table required a metadata refresh to discover older Hive p
 
 - **Data volume:** 245,000+ rows at 15-minute resolution
 - **Time range:** January 2019 – April 2026
-- **Key finding:** Average renewable share of ~49.7%, consistent with official *Energiewende* benchmarks
+- **Average renewable share:** ~49.7%, consistent with official *Energiewende* benchmarks
+- **Notable trend:** Nuclear energy contributed 8.4% of the mix until its phase-out in April 2023; Wind Onshore has since grown to 22.9%, becoming the single largest generation source
 
