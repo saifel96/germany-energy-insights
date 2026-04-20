@@ -38,6 +38,8 @@ Looker Studio Dashboard
 
 All cloud infrastructure is provisioned with **Terraform**.
 
+![Pipeline Workflow](screens/workflow.png)
+
 ---
 
 ## Technologies
@@ -129,6 +131,15 @@ Built in **Looker Studio**, the dashboard contains two tiles:
 2. **Generation Mix by Hour** — bar/line chart of average solar, wind, coal and total load by hour of day (categorical distribution)
 
 **[View Live Dashboard](https://datastudio.google.com/reporting/6b7675eb-10f5-47d8-973c-548781d10a82)**
+
+### Overview
+![Overview](screens/overview.png)
+
+### Fuel Trends
+![Fuel Trends](screens/fuel_trends.png)
+
+### Patterns & Seasonality
+![Patterns and Seasonality](screens/patterns_seasonality.png)
 
 ---
 
@@ -250,3 +261,36 @@ germany-energy-insights/
 ├── data/                        # Raw JSON files (gitignored)
 └── docker-compose.yml
 ```
+
+---
+
+## Orchestration Strategy
+
+A hybrid approach was used to ensure delivery despite JVM/macOS compatibility constraints:
+
+| Task | Method | Notes |
+| :--- | :--- | :--- |
+| 1. Ingestion | Kestra (automated) | SMARD API fetch via Python |
+| 2. Raw Upload to GCS | Kestra (automated) | JSON → GCS Raw bucket |
+| 3. Spark Processing | Manual (local PySpark) | JVM 17+ / ARM conflict bypassed locally |
+| 4. Processed Upload to GCS | Kestra (automated) | Parquet → GCS Processed bucket |
+| 5. BigQuery External Table | Manual (BigQuery SQL) | Hive-partition alignment for 2019–2026 data |
+| 6. dbt Transformations | Kestra (automated) | Final modeling and business logic |
+
+---
+
+## Engineering Challenges
+
+### JVM Compatibility (PySpark on ARM/Java 21+)
+Kestra's container ran Java 25, which completely removed `SecurityManager` — a dependency of Hadoop's `UserGroupInformation.getCurrentUser()` used by PySpark. No JVM flag can restore this in Java 21+. The workaround was running the Spark transformation locally with Java 17, then uploading the resulting Parquet files to GCS.
+
+### Historical Data Integrity (2019–2026)
+The BigQuery External Table required a metadata refresh to discover older Hive partitions already present in GCS. A `dbt run --full-refresh` then forced a full rebuild of all incremental models, ensuring the `fct_renewable_share` table covers the complete 2019–2026 range.
+
+---
+
+## Final Results
+
+- **Data volume:** 245,000+ rows of 15-minute energy generation data
+- **Time range:** January 2019 – April 2026
+- **Key insight:** Average renewable share of ~49.7%, consistent with official *Energiewende* benchmarks

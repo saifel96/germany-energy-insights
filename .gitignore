@@ -6,7 +6,6 @@ __pycache__/
 *.tfstate.backup
 .dbt/
 
-
 # Terraform
 .terraform/
 *.tfstate
@@ -19,6 +18,18 @@ terraform  # Falls du die Intel-Datei dort liegen hast
 __pycache__/
 data/
 *.csv
+.venv/
+.DS_Store
+
+# dbt — contains project/dataset names and keyfile references
+smard_analytics/profiles.yml
+smard_analytics/.user.yml
+
+# GCP keys
+*.p12
+*.pem
+*-sa.json
+/tmp/gcp_creds.json
 
 # Logs
 logs/

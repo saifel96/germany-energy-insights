@@ -1,0 +1,110 @@
+id: smard_energy_pipeline_final
+
+namespace: de.zoomcamp
+
+description: "GridLens Germany - SMARD End-to-End Pipeline"
+
+tasks:
+
+  - id: 1_download_smard
+
+    type: io.kestra.plugin.scripts.shell.Commands
+
+    taskRunner:
+
+      type: io.kestra.plugin.core.runner.Process
+
+    commands:
+
+      - cd /project && pip install -q requests pandas && python
+        ingestion/get_data.py
+
+  - id: 2_upload_raw_to_gcs
+
+    type: io.kestra.plugin.scripts.shell.Commands
+
+    description: "Upload raw JSON to GCS Raw"
+
+    taskRunner:
+
+      type: io.kestra.plugin.core.runner.Process
+
+    env:
+
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: "{{ kv('gcp_creds') }}"
+
+    commands:
+
+      - cd /project && pip install -q google-cloud-storage && python
+        ingestion/upload_data_to_gcs.py
+
+  - id: 3_spark_transform
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - |
+        apt-get install -y -q openjdk-17-jdk-headless
+        JAVA17=$(find /usr/lib/jvm -maxdepth 1 -name "java-17-openjdk*" -type d | head -1)
+        export JAVA_HOME=$JAVA17
+        export PATH=$JAVA_HOME/bin:$PATH
+        cd /project
+        pip install -q pyspark pandas pyarrow
+        python spark/transform_smard.py
+
+  - id: 4_upload_processed_to_gcs
+
+    type: io.kestra.plugin.scripts.shell.Commands
+
+    description: "Upload Parquet to GCS Processed"
+
+    taskRunner:
+
+      type: io.kestra.plugin.core.runner.Process
+
+    env:
+
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: "{{ kv('gcp_creds') }}"
+
+    commands:
+
+      - cd /project && pip install -q google-cloud-storage && python
+        spark/upload_processed_data_to_gcs.py
+
+  - id: 5_run_dbt
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    env:
+      KESTRA_GCP_JSON: "{{ kv('gcp_creds') }}"
+    commands:
+      # 1. Wir gehen in das Verzeichnis, wo dbt_project.yml wirklich liegt
+      - cd /project/smard_analytics
+
+      # 2. dbt installieren (falls noch nicht da)
+      - pip install -q dbt-bigquery
+
+      # 3. Den Key absolut sicher als Datei schreiben
+      - python3 -c "import os; f = open('keyfile.json', 'w');
+        f.write(os.environ['KESTRA_GCP_JSON']); f.close()"
+
+      # 4. Den Pfad für dbt setzen (für dbt-Modelle, die env_var nutzen)
+      - export GOOGLE_APPLICATION_CREDENTIALS_JSON=$(cat keyfile.json)
+
+      # 5. dbt ausführen (mit expliziter Pfadangabe)
+      - dbt deps
+      - dbt run --profiles-dir . --target dev
+
+  - id: 6_success
+
+    type: io.kestra.plugin.core.log.Log
+
+    message: "Pipeline erfolgreich! Dashboard ist aktuell."
+
+triggers:
+
+  - id: daily_schedule
+
+    type: io.kestra.plugin.core.trigger.Schedule
+
+    cron: "0 8 * * *"

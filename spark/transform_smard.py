@@ -47,8 +47,8 @@ def smardProcess(data_path : str ):
     df_final.write \
     .partitionBy("year", "month") \
     .mode("overwrite") \
-    .parquet("/Users/saif/Desktop/mastr-pipeline/data/processed/")
+    .parquet("data/processed/")
 
 if __name__ == "__main__":
-    data_path = "/Users/saif/Desktop/mastr-pipeline/data"
+    data_path = "data" 
     smardProcess(data_path)

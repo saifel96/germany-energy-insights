@@ -1,10 +1,19 @@
 from google.cloud import storage
 from pathlib import Path
+import os
 
+
+# GCP Credentials für Kestra
+creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+if creds_json:
+    creds_path = "/tmp/gcp_creds.json"
+    with open(creds_path, "w") as f:
+        f.write(creds_json)
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
 
 BUCKET_NAME = "mastr-pipeline-de-processed-data"
 
-PARQUET_PATH = "/Users/saif/Desktop/mastr-pipeline/data/processed"
+PARQUET_PATH = os.environ.get("PROCESSED_DATA_PATH", "/project/data/processed")
 
 
 def uploadProcessedToGCS(bucket_name, folder_path):
